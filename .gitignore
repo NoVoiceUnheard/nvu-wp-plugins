@@ -5,3 +5,6 @@
 .vscode/
 wp-config.php
 .DS_Store
+vendor/
+debug.log
+.env

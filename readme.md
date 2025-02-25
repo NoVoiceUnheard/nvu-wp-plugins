@@ -1,7 +1,13 @@
 # Website Setup & Contribution Guide
 
-## Prerequisites
-Before setting up the project, ensure you have the following installed:
+## 📌 Prerequisites
+- PHP (Ensure it's installed and available in your terminal)
+- **Composer** (Required for dependency management)
+  - Install via:  
+    ```bash
+    curl -sS https://getcomposer.org/installer | php
+    mv composer.phar /usr/local/bin/composer
+    ```
 - [Local](https://localwp.com/) (For managing the WordPress site locally)
 - [Git](https://git-scm.com/) (For version control)
 - A GitHub account with access to this repository
@@ -25,6 +31,27 @@ cd website
 - Navigate to `novoiceunheard.local/wp-admin/`
 - Use the credentials provided (or set up a new admin user if required).
 
+## 🌍 Environment Variables & Dotenv
+This project uses **Dotenv** to manage environment variables.
+
+### 🔧 Setup
+1. **Ensure Composer is Installed**  
+   Run:
+   ```bash
+   composer install
+   ```
+
+2. **Create a `.env` file** in the root directory with the following format:
+   ```ini
+      DB_NAME=local
+      DB_USER=root
+      DB_PASSWORD=root
+      DB_HOST=localhost
+      WP_HOME=http://novoiceunheard.local
+      WP_SITEURL=http://novoiceunheard.local
+      WP_ENVIRONMENT_TYPE=local
+   ```
+   
 ## Making Changes & Committing to GitHub
 
 ### 1. Pull the Latest Changes
@@ -53,8 +80,15 @@ If you encounter errors while pulling or pushing changes, try:
 - Ensuring you're on the `main` branch: `git checkout main`
 - Pulling changes again before pushing: `git pull origin main`
 - Checking for merge conflicts and resolving them before committing
+- Make sure environment variables are enabled in php
 
 If issues persist, reach out to a team member for assistance!
 
+## TO DO:
+
+- [x] Create custom child theme
+- [ ] Setup static pages
+- [ ] Setup blog with ActivityPub
+- [ ] Create protest listing page and connect to Proton calendar
 ---
 This README will evolve as we refine our workflow. Feel free to update it with any additional steps or best practices!
