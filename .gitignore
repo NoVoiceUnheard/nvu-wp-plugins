@@ -4,3 +4,4 @@
 .local/
 .vscode/
 wp-config.php
+.DS_Store
