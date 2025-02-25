@@ -3,8 +3,8 @@
 /wp-content/backups/
 .local/
 .vscode/
-wp-config.php
 .DS_Store
 vendor/
 debug.log
 .env
+local-xdebuginfo.php

@@ -12,36 +12,33 @@
 - [Git](https://git-scm.com/) (For version control)
 - A GitHub account with access to this repository
 
-## Setting Up the Project
+# ✅ Setting Up a New Local Site & Transferring the Repo
 
-### 1. Clone the Repository
-Open a terminal and navigate to your preferred development directory, then run:
+## 1 Create a New Site in Local
+- Open Local by Flywheel
+- Click **Create a New Site**
+- Choose **Preferred setup**
+- Setup your admin user
+- Complete the site setup
+
+## 2 Remove Default public Folder
+- Go to your Local site’s folder
+- Delete the default **public** folder
+
+## 3️ Clone Your Repo into the Site Folder
+Open a terminal and navigate to your Local Sites app folder and clone:
 ```bash
-git clone https://github.com/NoVoiceUnheard/website.git
-cd website
+cd path/to/Local\ Sites/your-site/app
+git clone https://github.com/NoVoiceUnheard/website.git public
 ```
 
-### 2. Import the Project into Local
-1. Open Local and select **"Import Site"**.
-2. Choose the cloned repository folder.
-3. Follow the setup prompts (use the default PHP & MySQL versions recommended by Local).
-4. Start the site in Local.
+## 4️ Run Composer
+```
+cd public
+composer install
+```
 
-### 3. Access the WordPress Dashboard
-- Navigate to `novoiceunheard.local/wp-admin/`
-- Use the credentials provided (or set up a new admin user if required).
-
-## 🌍 Environment Variables & Dotenv
-This project uses **Dotenv** to manage environment variables.
-
-### 🔧 Setup
-1. **Ensure Composer is Installed**  
-   Run:
-   ```bash
-   composer install
-   ```
-
-2. **Create a `.env` file** in the root directory with the following format:
+## 5 Set Up .env File in the root directory with the following format:
    ```ini
       DB_NAME=local
       DB_USER=root
@@ -51,6 +48,10 @@ This project uses **Dotenv** to manage environment variables.
       WP_SITEURL=http://novoiceunheard.local
       WP_ENVIRONMENT_TYPE=local
    ```
+
+## 6. Access the WordPress Dashboard
+- Navigate to `novoiceunheard.local/wp-admin/`
+- Use the credentials provided (or set up a new admin user 
    
 ## Making Changes & Committing to GitHub
 
