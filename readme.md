@@ -32,7 +32,7 @@
 Open a terminal and navigate to your Local Sites app folder and clone:
 ```bash
 cd path/to/Local\ Sites/your-site/app
-git clone https://github.com/NoVoiceUnheard/website.git public
+git clone --recurse-submodules https://github.com/NoVoiceUnheard/website.git public
 ```
 
 ## 4️ Run Composer
