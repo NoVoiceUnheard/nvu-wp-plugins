@@ -91,10 +91,9 @@ If issues persist, reach out to a team member for assistance!
 ## TO DO:
 
 - [x] Create custom child theme
-- [ ] Setup static pages
+- [ ] Setup [static pages](/docs/sitemap.md)
 - [ ] Setup blog with ActivityPub
 - [ ] Create protest listing page and connect to Proton calendar
-- [ ] Static pages
 - [ ] Shop / Donation integration
 - [ ] AMP (mobile seo and performance)
 - [ ] Organizers
