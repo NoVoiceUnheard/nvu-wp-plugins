@@ -5,7 +5,7 @@
 .local/
 .vscode/
 .DS_Store
-vendor/
+/vendor/
 debug.log
 .env
 local-xdebuginfo.php
