@@ -91,6 +91,7 @@ If issues persist, reach out to a team member for assistance!
 ## TO DO:
 ### Phase 1
 - [x] Create custom child theme
+- [ ] Create theme as a git submodule
 - [ ] AMP (mobile seo and performance)
   - Verify required plugins are supported
 - [ ] Setup [forms](/docs/sitemap.md#forms-user-submissions)
@@ -98,6 +99,7 @@ If issues persist, reach out to a team member for assistance!
 - [ ] Organizers (using form submissions)
 - [ ] Setup blog with ActivityPub (filter by categories)
 - [ ] Setup [static pages](/docs/sitemap.md#static-pages)
+- [ ] Deploy to stage
 ### Phase 2
 - [ ] Shop / Donation integration (WooCommerce)
 ### Phase 3
