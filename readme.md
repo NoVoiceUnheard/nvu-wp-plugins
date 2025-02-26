@@ -3,10 +3,13 @@
 ## :pushpin: Prerequisites
 - PHP (Ensure it's installed and available in your terminal) [Mac](https://www.php.net/manual/en/install.macosx.packages.php) [Windows](https://www.php.net/manual/en/install.windows.php)
 - **Composer** (Required for dependency management)
-  - Install via:  
+  - from project directory:  
     ```bash
-    curl -sS https://getcomposer.org/installer | php
-    mv composer.phar /usr/local/bin/composer
+      php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+      php -r "if (hash_file('sha384', 'composer-setup.php') === 'dac665fdc30fdd8ec78b38b9800061b4150413ff2e3b6f88543c636f7cd84f6db9189d43a81e5503cda447da73c7e5b6') { echo 'Installer verified'.PHP_EOL; } else { echo 'Installer corrupt'.PHP_EOL; unlink('composer-setup.php'); exit(1); }"
+      php composer-setup.php
+      php -r "unlink('composer-setup.php');"
+      mv composer.phar /usr/local/bin/composer
     ```
 - [Local](https://localwp.com/) (For managing the WordPress site locally)
 - [Git](https://git-scm.com/downloads) (For version control)
@@ -91,5 +94,10 @@ If issues persist, reach out to a team member for assistance!
 - [ ] Setup static pages
 - [ ] Setup blog with ActivityPub
 - [ ] Create protest listing page and connect to Proton calendar
+- [ ] Static pages
+- [ ] Shop / Donation integration
+- [ ] AMP (mobile seo and performance)
+- [ ] Organizers
+- [ ] Contact
 ---
 This README will evolve as we refine our workflow. Feel free to update it with any additional steps or best practices!
