@@ -92,13 +92,14 @@ If issues persist, reach out to a team member for assistance!
 ### Phase 1
 - [x] Create custom child theme
 - [ ] AMP (mobile seo and performance)
-- [ ] Setup [static pages](/docs/sitemap.md)
-- [ ] Organizers
-- [ ] Setup [forms](/docs/sitemap.md)
-- [ ] Create protest listing page and connect to Proton calendar
+  - Verify required plugins are supported
+- [ ] Setup [forms](/docs/sitemap.md#forms-user-submissions)
+- [ ] Protest listing page (using form submissions)
+- [ ] Organizers (using form submissions)
+- [ ] Setup blog with ActivityPub (filter by categories)
+- [ ] Setup [static pages](/docs/sitemap.md#static-pages)
 ### Phase 2
 - [ ] Shop / Donation integration (WooCommerce)
-- [ ] Setup blog with ActivityPub
 ### Phase 3
 - [ ] Setup groups by state for user threads
 ---

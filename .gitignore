@@ -1,6 +1,7 @@
 /wp-content/uploads/
 /wp-content/cache/
 /wp-content/backups/
+/wp-content/*-backups
 .local/
 .vscode/
 .DS_Store
