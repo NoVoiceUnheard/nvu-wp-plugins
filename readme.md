@@ -1,7 +1,7 @@
 # Website Setup & Contribution Guide
 
-## 📌 Prerequisites
-- PHP (Ensure it's installed and available in your terminal)
+## :pushpin: Prerequisites
+- PHP (Ensure it's installed and available in your terminal) [Mac](https://www.php.net/manual/en/install.macosx.packages.php) [Windows](https://www.php.net/manual/en/install.windows.php)
 - **Composer** (Required for dependency management)
   - Install via:  
     ```bash
@@ -9,8 +9,8 @@
     mv composer.phar /usr/local/bin/composer
     ```
 - [Local](https://localwp.com/) (For managing the WordPress site locally)
-- [Git](https://git-scm.com/) (For version control)
-- A GitHub account with access to this repository
+- [Git](https://git-scm.com/downloads) (For version control)
+- A GitHub account with access to [this repository](https://github.com/NoVoiceUnheard/website)
 
 # ✅ Setting Up a New Local Site & Transferring the Repo
 
