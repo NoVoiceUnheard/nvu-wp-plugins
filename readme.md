@@ -1,6 +1,6 @@
 # Website Setup & Contribution Guide
 
-## :pushpin: Prerequisites
+## :pushpin: [Prerequisites](https://github.com/NoVoiceUnheard/website/tree/main?tab=readme-ov-file#pushpin-prerequisites)
 - PHP (Ensure it's installed and available in your terminal) [Mac](https://www.php.net/manual/en/install.macosx.packages.php) [Windows](https://www.php.net/manual/en/install.windows.php)
 - **Composer** (Required for dependency management)
   - from project directory:  
@@ -13,7 +13,7 @@
     ```
 - [Local](https://localwp.com/) (For managing the WordPress site locally)
 - [Git](https://git-scm.com/downloads) (For version control)
-- A GitHub account with access to [this repository](https://github.com/NoVoiceUnheard/website)
+- A GitHub account with access to [this repository](https://github.com/NoVoiceUnheard/website) and [ssh auth](https://docs.github.com/en/get-started/getting-started-with-git/set-up-git#authenticating-with-github-from-git)
 
 # ✅ Setting Up a New Local Site & Transferring the Repo
 
