@@ -95,12 +95,17 @@ If issues persist, reach out to a team member for assistance!
 - [ ] AMP (mobile seo and performance)
   - Verify required plugins are supported
 - [ ] Setup [forms](/docs/sitemap.md#forms-user-submissions)
+  - [ ] General, Press, Volunteer, Newsletter, Registration
+  - [ ] Submit your organization (organizers)
+  - [ ] Submit your event (protest listing)
 - [ ] Email Marketing (Notifications)
 - [ ] Protest listing page (using form submissions)
 - [ ] Organizers (using form submissions)
 - [ ] Setup blog with ActivityPub (filter by categories)
 - [ ] Notifications (email, sms, push)
 - [ ] Setup [static pages](/docs/sitemap.md#static-pages)
+- [ ] ReCaptcha
+- [ ] Discord Webhooks
 - [ ] Deploy to stage
 ### Phase 2
 - [ ] Shop / Donation integration (WooCommerce)
