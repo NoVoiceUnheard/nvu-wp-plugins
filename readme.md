@@ -91,13 +91,15 @@ If issues persist, reach out to a team member for assistance!
 ## TO DO:
 ### Phase 1
 - [x] Create custom child theme
-- [ ] Create theme as a git submodule
+- [x] Create theme as a git submodule
 - [ ] AMP (mobile seo and performance)
   - Verify required plugins are supported
 - [ ] Setup [forms](/docs/sitemap.md#forms-user-submissions)
+- [ ] Email Marketing (Notifications)
 - [ ] Protest listing page (using form submissions)
 - [ ] Organizers (using form submissions)
 - [ ] Setup blog with ActivityPub (filter by categories)
+- [ ] Notifications (email, sms, push)
 - [ ] Setup [static pages](/docs/sitemap.md#static-pages)
 - [ ] Deploy to stage
 ### Phase 2
