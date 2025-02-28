@@ -92,13 +92,12 @@ If issues persist, reach out to a team member for assistance!
 ### Phase 1
 - [x] Create custom child theme
 - [x] Create theme as a git submodule
-- [ ] AMP (mobile seo and performance)
-  - Verify required plugins are supported
+- [x] Email Marketing (Newsletter)
 - [ ] Setup [forms](/docs/sitemap.md#forms-user-submissions)
-  - [ ] General, Press, Volunteer, Newsletter, Registration
-  - [ ] Submit your organization (organizers)
-  - [ ] Submit your event (protest listing)
-- [ ] Email Marketing (Notifications)
+  - [x] General, Press, Volunteer, Newsletter
+  - [x] Submit your organization (organizers)
+  - [x] Submit your event (protest listing)
+  - [ ] Allow registration from contact forms
 - [ ] Protest listing page (using form submissions)
 - [ ] Organizers (using form submissions)
 - [ ] Setup blog with ActivityPub (filter by categories)
@@ -106,6 +105,8 @@ If issues persist, reach out to a team member for assistance!
 - [ ] Setup [static pages](/docs/sitemap.md#static-pages)
 - [ ] ReCaptcha
 - [ ] Discord Webhooks
+- [ ] AMP (mobile seo and performance)
+  - Verify required plugins are supported
 - [ ] Deploy to stage
 ### Phase 2
 - [ ] Shop / Donation integration (WooCommerce)
