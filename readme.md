@@ -108,6 +108,7 @@ If issues persist, reach out to a team member for assistance!
 - [ ] AMP (mobile seo and performance)
   - Verify required plugins are supported
 - [ ] Deploy to stage
+- [ ] Migrate to Cloudflare DNS
 ### Phase 2
 - [ ] Shop / Donation integration (WooCommerce)
 ### Phase 3
