@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name: CF7 to Custom Post Type
- * Description: Saves Contact Form 7 submissions as a custom post type with all form fields.
- * Version: 1.3
- * Author: Your Name
+ * Description: Saves Contact Form 7 submissions as a custom post type with all form fields and provides a block to display approved submissions.
+ * Version: 1.0
+ * Author: NoVoiceUnheard
  */
 
 // Exit if accessed directly
@@ -94,3 +94,44 @@ function cf7_save_submission_to_post($contact_form) {
     }
 }
 add_action('wpcf7_mail_sent', 'cf7_save_submission_to_post');
+
+// Register a Gutenberg block to display approved submissions
+function cf7_register_submission_block() {
+    wp_register_script(
+        'cf7-submission-block',
+        plugins_url('block.js', __FILE__),
+        array('wp-blocks', 'wp-editor', 'wp-components', 'wp-element')
+    );
+
+    register_block_type('cf7/submission-block', array(
+        'editor_script' => 'cf7-submission-block',
+        'render_callback' => 'cf7_render_submission_block'
+    ));
+}
+add_action('init', 'cf7_register_submission_block');
+
+// Render the block output
+function cf7_render_submission_block() {
+    $args = array(
+        'post_type' => 'submissions',
+        'post_status' => 'publish', // Only approved submissions
+        'numberposts' => 10
+    );
+    
+    $submissions = get_posts($args);
+    $output = '<div class="cf7-submission-list">';
+    
+    if ($submissions) {
+        foreach ($submissions as $submission) {
+            $output .= '<div class="cf7-submission-item">';
+            $output .= '<h3>' . esc_html($submission->post_title) . '</h3>';
+            $output .= '<p>' . esc_html($submission->post_content) . '</p>';
+            $output .= '</div>';
+        }
+    } else {
+        $output .= '<p>No approved submissions found.</p>';
+    }
+    
+    $output .= '</div>';
+    return $output;
+}

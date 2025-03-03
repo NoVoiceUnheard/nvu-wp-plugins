@@ -3,7 +3,7 @@
  * Plugin Name: CF7 Registration
  * Description: A plugin to link Contact Form 7 with WordPress user registration using email as the username, without requiring first and last name.
  * Version: 1.0
- * Author: @natedoesweb
+ * Author: NoVoiceUnheard
  * License: GPL2
  */
 

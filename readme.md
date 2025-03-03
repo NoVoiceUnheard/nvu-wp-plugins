@@ -99,6 +99,7 @@ If issues persist, reach out to a team member for assistance!
   - [x] Submit your event (protest listing)
   - [ ] Allow registration from contact forms
 - [ ] Protest listing page (using form submissions)
+  - [ ] hide submitters email
 - [ ] Organizers (using form submissions)
 - [ ] Setup blog with ActivityPub (filter by categories)
 - [ ] Notifications (email, sms, push)
@@ -111,6 +112,10 @@ If issues persist, reach out to a team member for assistance!
 - [ ] Migrate to Cloudflare DNS
 ### Phase 2
 - [ ] Shop / Donation integration (WooCommerce)
+- [ ] NVU member management (discord backup)
+  - [ ] Member role notifications
+  - [ ] link to discord user
+  - [ ] member dashboard
 ### Phase 3
 - [ ] Setup groups by state for user threads
 ---
