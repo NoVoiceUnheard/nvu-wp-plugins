@@ -1,0 +1,764 @@
+<?php
+/**
+ * Migration class file.
+ *
+ * @package Activitypub
+ */
+
+namespace Activitypub;
+
+use Activitypub\Collection\Actors;
+use Activitypub\Collection\Followers;
+use Activitypub\Collection\Outbox;
+use Activitypub\Transformer\Factory;
+
+/**
+ * ActivityPub Migration Class
+ *
+ * @author Matthias Pfefferle
+ */
+class Migration {
+	/**
+	 * Initialize the class, registering WordPress hooks.
+	 */
+	public static function init() {
+		\add_action( 'activitypub_migrate', array( self::class, 'async_migration' ) );
+		\add_action( 'activitypub_upgrade', array( self::class, 'async_upgrade' ), 10, 99 );
+		\add_action( 'activitypub_update_comment_counts', array( self::class, 'update_comment_counts' ), 10, 2 );
+
+		self::maybe_migrate();
+	}
+
+	/**
+	 * Get the target version.
+	 *
+	 * This is the version that the database structure will be updated to.
+	 * It is the same as the plugin version.
+	 *
+	 * @deprecated 4.2.0 Use constant ACTIVITYPUB_PLUGIN_VERSION directly.
+	 *
+	 * @return string The target version.
+	 */
+	public static function get_target_version() {
+		_deprecated_function( __FUNCTION__, '4.2.0', 'ACTIVITYPUB_PLUGIN_VERSION' );
+
+		return ACTIVITYPUB_PLUGIN_VERSION;
+	}
+
+	/**
+	 * The current version of the database structure.
+	 *
+	 * @return string The current version.
+	 */
+	public static function get_version() {
+		return get_option( 'activitypub_db_version', 0 );
+	}
+
+	/**
+	 * Locks the database migration process to prevent simultaneous migrations.
+	 *
+	 * @return bool|int True if the lock was successful, timestamp of existing lock otherwise.
+	 */
+	public static function lock() {
+		global $wpdb;
+
+		// Try to lock.
+		$lock_result = (bool) $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO `$wpdb->options` ( `option_name`, `option_value`, `autoload` ) VALUES (%s, %s, 'no') /* LOCK */", 'activitypub_migration_lock', \time() ) ); // phpcs:ignore WordPress.DB
+
+		if ( ! $lock_result ) {
+			$lock_result = \get_option( 'activitypub_migration_lock' );
+		}
+
+		return $lock_result;
+	}
+
+	/**
+	 * Unlocks the database migration process.
+	 */
+	public static function unlock() {
+		\delete_option( 'activitypub_migration_lock' );
+	}
+
+	/**
+	 * Whether the database migration process is locked.
+	 *
+	 * @return boolean
+	 */
+	public static function is_locked() {
+		$lock = \get_option( 'activitypub_migration_lock' );
+
+		if ( ! $lock ) {
+			return false;
+		}
+
+		$lock = (int) $lock;
+
+		if ( $lock < \time() - 1800 ) {
+			self::unlock();
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Whether the database structure is up to date.
+	 *
+	 * @return bool True if the database structure is up to date, false otherwise.
+	 */
+	public static function is_latest_version() {
+		return (bool) \version_compare(
+			self::get_version(),
+			ACTIVITYPUB_PLUGIN_VERSION,
+			'=='
+		);
+	}
+
+	/**
+	 * Updates the database structure if necessary.
+	 */
+	public static function maybe_migrate() {
+		if ( self::is_latest_version() ) {
+			return;
+		}
+
+		if ( self::is_locked() ) {
+			return;
+		}
+
+		self::lock();
+
+		$version_from_db = self::get_version();
+
+		// Check for initial migration.
+		if ( ! $version_from_db ) {
+			self::add_default_settings();
+			$version_from_db = ACTIVITYPUB_PLUGIN_VERSION;
+		}
+
+		// Schedule the async migration.
+		if ( ! \wp_next_scheduled( 'activitypub_migrate', $version_from_db ) ) {
+			\wp_schedule_single_event( \time(), 'activitypub_migrate', array( $version_from_db ) );
+		}
+		if ( \version_compare( $version_from_db, '0.17.0', '<' ) ) {
+			self::migrate_from_0_16();
+		}
+		if ( \version_compare( $version_from_db, '1.3.0', '<' ) ) {
+			self::migrate_from_1_2_0();
+		}
+		if ( \version_compare( $version_from_db, '2.1.0', '<' ) ) {
+			self::migrate_from_2_0_0();
+		}
+		if ( \version_compare( $version_from_db, '2.3.0', '<' ) ) {
+			self::migrate_from_2_2_0();
+		}
+		if ( \version_compare( $version_from_db, '3.0.0', '<' ) ) {
+			self::migrate_from_2_6_0();
+		}
+		if ( \version_compare( $version_from_db, '4.0.0', '<' ) ) {
+			self::migrate_to_4_0_0();
+		}
+		if ( \version_compare( $version_from_db, '4.1.0', '<' ) ) {
+			self::migrate_to_4_1_0();
+		}
+		if ( \version_compare( $version_from_db, '4.5.0', '<' ) ) {
+			\wp_schedule_single_event( \time() + MINUTE_IN_SECONDS, 'activitypub_update_comment_counts' );
+		}
+		if ( \version_compare( $version_from_db, '4.7.1', '<' ) ) {
+			self::migrate_to_4_7_1();
+		}
+		if ( \version_compare( $version_from_db, '4.7.2', '<' ) ) {
+			self::migrate_to_4_7_2();
+		}
+		if ( \version_compare( $version_from_db, '4.7.3', '<' ) ) {
+			add_action( 'init', 'flush_rewrite_rules', 20 );
+		}
+		if ( \version_compare( $version_from_db, '5.0.0', '<' ) ) {
+			Scheduler::register_schedules();
+			\wp_schedule_single_event( \time(), 'activitypub_upgrade', array( 'create_post_outbox_items' ) );
+			\wp_schedule_single_event( \time() + 15, 'activitypub_upgrade', array( 'create_comment_outbox_items' ) );
+			add_action( 'init', 'flush_rewrite_rules', 20 );
+		}
+		if ( \version_compare( $version_from_db, '5.2.0', '<' ) ) {
+			Scheduler::register_schedules();
+		}
+		if ( \version_compare( $version_from_db, '5.3.0', '<' ) ) {
+			add_action( 'init', 'flush_rewrite_rules', 20 );
+		}
+
+		/*
+		 * Add new update routines above this comment. ^
+		 *
+		 * Use 'unreleased' as the version number for new migrations and add tests for the callback directly.
+		 * The release script will automatically replace it with the actual version number.
+		 * Example:
+		 *
+		 * if ( \version_compare( $version_from_db, 'unreleased', '<' ) ) {
+		 *     // Update routine.
+		 * }
+		 */
+
+		/**
+		 * Fires when the system has to be migrated.
+		 *
+		 * @param string $version_from_db The version from which to migrate.
+		 * @param string $target_version  The target version to migrate to.
+		 */
+		\do_action( 'activitypub_migrate', $version_from_db, ACTIVITYPUB_PLUGIN_VERSION );
+
+		\update_option( 'activitypub_db_version', ACTIVITYPUB_PLUGIN_VERSION );
+
+		self::unlock();
+	}
+
+	/**
+	 * Asynchronously migrates the database structure.
+	 *
+	 * @param string $version_from_db The version from which to migrate.
+	 */
+	public static function async_migration( $version_from_db ) {
+		if ( \version_compare( $version_from_db, '1.0.0', '<' ) ) {
+			self::migrate_from_0_17();
+		}
+	}
+
+	/**
+	 * Asynchronously runs upgrade routines.
+	 *
+	 * @param callable $callback Callable upgrade routine. Must be a method of this class.
+	 * @params mixed   ...$args  Optional. Parameters that get passed to the callback.
+	 */
+	public static function async_upgrade( $callback ) {
+		$args = \func_get_args();
+
+		// Bail if the existing lock is still valid.
+		if ( self::is_locked() ) {
+			\wp_schedule_single_event( time() + MINUTE_IN_SECONDS, 'activitypub_upgrade', $args );
+			return;
+		}
+
+		self::lock();
+
+		$callback = array_shift( $args ); // Remove $callback from arguments.
+		$next     = \call_user_func_array( array( self::class, $callback ), $args );
+
+		self::unlock();
+
+		if ( ! empty( $next ) ) {
+			// Schedule the next run, adding the result to the arguments.
+			\wp_schedule_single_event(
+				\time() + 30,
+				'activitypub_upgrade',
+				\array_merge( array( $callback ), \array_values( $next ) )
+			);
+		}
+	}
+
+	/**
+	 * Updates the custom template to use shortcodes instead of the deprecated templates.
+	 */
+	private static function migrate_from_0_16() {
+		// Get the custom template.
+		$old_content = \get_option( 'activitypub_custom_post_content', ACTIVITYPUB_CUSTOM_POST_CONTENT );
+
+		/*
+		 * If the old content exists but is a blank string, we're going to need a flag to updated it even
+		 * after setting it to the default contents.
+		 */
+		$need_update = false;
+
+		// If the old contents is blank, use the defaults.
+		if ( '' === $old_content ) {
+			$old_content = ACTIVITYPUB_CUSTOM_POST_CONTENT;
+			$need_update = true;
+		}
+
+		// Set the new content to be the old content.
+		$content = $old_content;
+
+		// Convert old templates to shortcodes.
+		$content = \str_replace( '%title%', '[ap_title]', $content );
+		$content = \str_replace( '%excerpt%', '[ap_excerpt]', $content );
+		$content = \str_replace( '%content%', '[ap_content]', $content );
+		$content = \str_replace( '%permalink%', '[ap_permalink type="html"]', $content );
+		$content = \str_replace( '%shortlink%', '[ap_shortlink type="html"]', $content );
+		$content = \str_replace( '%hashtags%', '[ap_hashtags]', $content );
+		$content = \str_replace( '%tags%', '[ap_hashtags]', $content );
+
+		// Store the new template if required.
+		if ( $content !== $old_content || $need_update ) {
+			\update_option( 'activitypub_custom_post_content', $content );
+		}
+	}
+
+	/**
+	 * Updates the DB-schema of the followers-list.
+	 */
+	public static function migrate_from_0_17() {
+		// Migrate followers.
+		foreach ( get_users( array( 'fields' => 'ID' ) ) as $user_id ) {
+			$followers = get_user_meta( $user_id, 'activitypub_followers', true );
+
+			if ( $followers ) {
+				foreach ( $followers as $actor ) {
+					Followers::add_follower( $user_id, $actor );
+				}
+			}
+		}
+
+		Activitypub::flush_rewrite_rules();
+	}
+
+	/**
+	 * Clear the cache after updating to 1.3.0.
+	 */
+	private static function migrate_from_1_2_0() {
+		$user_ids = \get_users(
+			array(
+				'fields'         => 'ID',
+				'capability__in' => array( 'publish_posts' ),
+			)
+		);
+
+		foreach ( $user_ids as $user_id ) {
+			wp_cache_delete( sprintf( Followers::CACHE_KEY_INBOXES, $user_id ), 'activitypub' );
+		}
+	}
+
+	/**
+	 * Unschedule Hooks after updating to 2.0.0.
+	 */
+	private static function migrate_from_2_0_0() {
+		wp_clear_scheduled_hook( 'activitypub_send_post_activity' );
+		wp_clear_scheduled_hook( 'activitypub_send_update_activity' );
+		wp_clear_scheduled_hook( 'activitypub_send_delete_activity' );
+
+		wp_unschedule_hook( 'activitypub_send_post_activity' );
+		wp_unschedule_hook( 'activitypub_send_update_activity' );
+		wp_unschedule_hook( 'activitypub_send_delete_activity' );
+
+		$object_type = \get_option( 'activitypub_object_type', ACTIVITYPUB_DEFAULT_OBJECT_TYPE );
+		if ( 'article' === $object_type ) {
+			\update_option( 'activitypub_object_type', 'wordpress-post-format' );
+		}
+	}
+
+	/**
+	 * Add the ActivityPub capability to all users that can publish posts
+	 * Delete old meta to store followers.
+	 */
+	private static function migrate_from_2_2_0() {
+		// Add the ActivityPub capability to all users that can publish posts.
+		self::add_activitypub_capability();
+	}
+
+	/**
+	 * Rename DB fields.
+	 */
+	private static function migrate_from_2_6_0() {
+		wp_cache_flush();
+
+		self::update_usermeta_key( 'activitypub_user_description', 'activitypub_description' );
+
+		self::update_options_key( 'activitypub_blog_user_description', 'activitypub_blog_description' );
+		self::update_options_key( 'activitypub_blog_user_identifier', 'activitypub_blog_identifier' );
+	}
+
+	/**
+	 * * Update actor-mode settings.
+	 * * Get the ID of the latest blog post and save it to the options table.
+	 */
+	private static function migrate_to_4_0_0() {
+		$latest_post_id = 0;
+
+		// Get the ID of the latest blog post and save it to the options table.
+		$latest_post = get_posts(
+			array(
+				'numberposts' => 1,
+				'orderby'     => 'ID',
+				'order'       => 'DESC',
+				'post_type'   => 'any',
+				'post_status' => 'publish',
+			)
+		);
+
+		if ( $latest_post ) {
+			$latest_post_id = $latest_post[0]->ID;
+		}
+
+		\update_option( 'activitypub_last_post_with_permalink_as_id', $latest_post_id );
+
+		$users = \get_users(
+			array(
+				'capability__in' => array( 'activitypub' ),
+			)
+		);
+
+		foreach ( $users as $user ) {
+			$followers = Followers::get_followers( $user->ID );
+
+			if ( $followers ) {
+				\update_user_option( $user->ID, 'activitypub_use_permalink_as_id', '1' );
+			}
+		}
+
+		$followers = Followers::get_followers( Actors::BLOG_USER_ID );
+
+		if ( $followers ) {
+			\update_option( 'activitypub_use_permalink_as_id_for_blog', '1' );
+		}
+
+		self::migrate_actor_mode();
+	}
+
+	/**
+	 * Upate to 4.1.0
+	 *
+	 * * Migrate the `activitypub_post_content_type` to only use `activitypub_custom_post_content`.
+	 */
+	public static function migrate_to_4_1_0() {
+		$content_type = \get_option( 'activitypub_post_content_type' );
+
+		switch ( $content_type ) {
+			case 'excerpt':
+				$template = "[ap_excerpt]\n\n[ap_permalink type=\"html\"]";
+				break;
+			case 'title':
+				$template = "[ap_title type=\"html\"]\n\n[ap_permalink type=\"html\"]";
+				break;
+			case 'content':
+				$template = "[ap_content]\n\n[ap_permalink type=\"html\"]\n\n[ap_hashtags]";
+				break;
+			case 'custom':
+				$template = \get_option( 'activitypub_custom_post_content', ACTIVITYPUB_CUSTOM_POST_CONTENT );
+				break;
+			default:
+				$template = ACTIVITYPUB_CUSTOM_POST_CONTENT;
+				break;
+		}
+
+		\update_option( 'activitypub_custom_post_content', $template );
+
+		\delete_option( 'activitypub_post_content_type' );
+
+		$object_type = \get_option( 'activitypub_object_type', false );
+		if ( ! $object_type ) {
+			\update_option( 'activitypub_object_type', 'note' );
+		}
+
+		// Clean up empty visibility meta.
+		global $wpdb;
+		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			"DELETE FROM $wpdb->postmeta
+			WHERE meta_key = 'activitypub_content_visibility'
+			AND (meta_value IS NULL OR meta_value = '')"
+		);
+	}
+
+	/**
+	 * Updates post meta keys to be prefixed with an underscore.
+	 */
+	public static function migrate_to_4_7_1() {
+		global $wpdb;
+
+		$meta_keys = array(
+			'activitypub_actor_json',
+			'activitypub_canonical_url',
+			'activitypub_errors',
+			'activitypub_inbox',
+			'activitypub_user_id',
+		);
+
+		foreach ( $meta_keys as $meta_key ) {
+			// phpcs:ignore WordPress.DB
+			$wpdb->update( $wpdb->postmeta, array( 'meta_key' => '_' . $meta_key ), array( 'meta_key' => $meta_key ) );
+		}
+	}
+
+	/**
+	 * Clears the post cache for Followers, we should have done this in 4.7.1 when we renamed those keys.
+	 */
+	public static function migrate_to_4_7_2() {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB
+		$followers = $wpdb->get_col(
+			$wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s", Followers::POST_TYPE )
+		);
+		foreach ( $followers as $id ) {
+			clean_post_cache( $id );
+		}
+	}
+
+	/**
+	 * Update comment counts for posts in batches.
+	 *
+	 * @see Comment::pre_wp_update_comment_count_now()
+	 * @param int $batch_size Optional. Number of posts to process per batch. Default 100.
+	 * @param int $offset     Optional. Number of posts to skip. Default 0.
+	 */
+	public static function update_comment_counts( $batch_size = 100, $offset = 0 ) {
+		global $wpdb;
+
+		// Bail if the existing lock is still valid.
+		if ( self::is_locked() ) {
+			\wp_schedule_single_event(
+				time() + ( 5 * MINUTE_IN_SECONDS ),
+				'activitypub_update_comment_counts',
+				array(
+					'batch_size' => $batch_size,
+					'offset'     => $offset,
+				)
+			);
+			return;
+		}
+
+		self::lock();
+
+		Comment::register_comment_types();
+		$comment_types  = Comment::get_comment_type_slugs();
+		$type_inclusion = "AND comment_type IN ('" . implode( "','", $comment_types ) . "')";
+
+		// Get and process this batch.
+		$post_ids = $wpdb->get_col( // phpcs:ignore WordPress.DB
+			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				"SELECT DISTINCT comment_post_ID FROM {$wpdb->comments} WHERE comment_approved = '1' {$type_inclusion} ORDER BY comment_post_ID LIMIT %d OFFSET %d",
+				$batch_size,
+				$offset
+			)
+		);
+
+		foreach ( $post_ids as $post_id ) {
+			\wp_update_comment_count_now( $post_id );
+		}
+
+		if ( count( $post_ids ) === $batch_size ) {
+			// Schedule next batch.
+			\wp_schedule_single_event(
+				time() + MINUTE_IN_SECONDS,
+				'activitypub_update_comment_counts',
+				array(
+					'batch_size' => $batch_size,
+					'offset'     => $offset + $batch_size,
+				)
+			);
+		}
+
+		self::unlock();
+	}
+
+	/**
+	 * Create outbox items for posts in batches.
+	 *
+	 * @param int $batch_size Optional. Number of posts to process per batch. Default 50.
+	 * @param int $offset     Optional. Number of posts to skip. Default 0.
+	 * @return array|null Array with batch size and offset if there are more posts to process, null otherwise.
+	 */
+	public static function create_post_outbox_items( $batch_size = 50, $offset = 0 ) {
+		$posts = \get_posts(
+			array(
+				// our own `ap_outbox` will be excluded from `any` by virtue of its `exclude_from_search` arg.
+				'post_type'      => 'any',
+				'posts_per_page' => $batch_size,
+				'offset'         => $offset,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'     => array(
+					array(
+						'key'   => 'activitypub_status',
+						'value' => 'federated',
+					),
+				),
+			)
+		);
+
+		// Avoid multiple queries for post meta.
+		\update_postmeta_cache( \wp_list_pluck( $posts, 'ID' ) );
+
+		foreach ( $posts as $post ) {
+			$visibility = \get_post_meta( $post->ID, 'activitypub_content_visibility', true );
+
+			self::add_to_outbox( $post, 'Create', $post->post_author, $visibility );
+
+			// Add Update activity when the post has been modified.
+			if ( $post->post_modified !== $post->post_date ) {
+				self::add_to_outbox( $post, 'Update', $post->post_author, $visibility );
+			}
+		}
+
+		if ( count( $posts ) === $batch_size ) {
+			return array(
+				'batch_size' => $batch_size,
+				'offset'     => $offset + $batch_size,
+			);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Create outbox items for comments in batches.
+	 *
+	 * @param int $batch_size Optional. Number of posts to process per batch. Default 50.
+	 * @param int $offset     Optional. Number of posts to skip. Default 0.
+	 * @return array|null Array with batch size and offset if there are more posts to process, null otherwise.
+	 */
+	public static function create_comment_outbox_items( $batch_size = 50, $offset = 0 ) {
+		$comments = \get_comments(
+			array(
+				'author__not_in' => array( 0 ), // Limit to comments by registered users.
+				'number'         => $batch_size,
+				'offset'         => $offset,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'     => array(
+					array(
+						'key'   => 'activitypub_status',
+						'value' => 'federated',
+					),
+				),
+			)
+		);
+
+		foreach ( $comments as $comment ) {
+			self::add_to_outbox( $comment, 'Create', $comment->user_id );
+		}
+
+		if ( count( $comments ) === $batch_size ) {
+			return array(
+				'batch_size' => $batch_size,
+				'offset'     => $offset + $batch_size,
+			);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Set the defaults needed for the plugin to work.
+	 *
+	 * Add the ActivityPub capability to all users that can publish posts.
+	 */
+	public static function add_default_settings() {
+		self::add_activitypub_capability();
+		self::add_notification_defaults();
+	}
+
+	/**
+	 * Add an activity to the outbox without federating it.
+	 *
+	 * @param \WP_Post|\WP_Comment $comment       The comment or post object.
+	 * @param string               $activity_type The type of activity.
+	 * @param int                  $user_id       The user ID.
+	 * @param string               $visibility    Optional. The visibility of the content. Default 'public'.
+	 */
+	private static function add_to_outbox( $comment, $activity_type, $user_id, $visibility = ACTIVITYPUB_CONTENT_VISIBILITY_PUBLIC ) {
+		$transformer = Factory::get_transformer( $comment );
+		if ( ! $transformer || \is_wp_error( $transformer ) ) {
+			return;
+		}
+
+		$activity = $transformer->to_object();
+		if ( ! $activity || \is_wp_error( $activity ) ) {
+			return;
+		}
+
+		// If the user is disabled, fall back to the blog user when available.
+		if ( is_user_disabled( $user_id ) ) {
+			if ( is_user_disabled( Actors::BLOG_USER_ID ) ) {
+				return;
+			} else {
+				$user_id = Actors::BLOG_USER_ID;
+			}
+		}
+
+		$post_id = Outbox::add( $activity, $activity_type, $user_id, $visibility );
+
+		// Immediately set to publish, no federation needed.
+		\wp_publish_post( $post_id );
+	}
+
+	/**
+	 * Add the ActivityPub capability to all users that can publish posts.
+	 */
+	private static function add_activitypub_capability() {
+		// Get all WP_User objects that can publish posts.
+		$users = \get_users(
+			array(
+				'capability__in' => array( 'publish_posts' ),
+			)
+		);
+
+		// Add ActivityPub capability to all users that can publish posts.
+		foreach ( $users as $user ) {
+			$user->add_cap( 'activitypub' );
+		}
+	}
+
+	/**
+	 * Add default notification settings.
+	 */
+	private static function add_notification_defaults() {
+		\add_option( 'activitypub_mailer_new_follower', '1' );
+		\add_option( 'activitypub_mailer_new_dm', '1' );
+	}
+
+	/**
+	 * Rename meta keys.
+	 *
+	 * @param string $old_key The old comment meta key.
+	 * @param string $new_key The new comment meta key.
+	 */
+	private static function update_usermeta_key( $old_key, $new_key ) {
+		global $wpdb;
+
+		$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$wpdb->usermeta,
+			array( 'meta_key' => $new_key ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+			array( 'meta_key' => $old_key ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+			array( '%s' ),
+			array( '%s' )
+		);
+	}
+
+	/**
+	 * Rename option keys.
+	 *
+	 * @param string $old_key The old option key.
+	 * @param string $new_key The new option key.
+	 */
+	private static function update_options_key( $old_key, $new_key ) {
+		global $wpdb;
+
+		$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$wpdb->options,
+			array( 'option_name' => $new_key ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+			array( 'option_name' => $old_key ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+			array( '%s' ),
+			array( '%s' )
+		);
+	}
+
+	/**
+	 * Migrate the actor mode settings.
+	 */
+	public static function migrate_actor_mode() {
+		$blog_profile    = \get_option( 'activitypub_enable_blog_user', '0' );
+		$author_profiles = \get_option( 'activitypub_enable_users', '1' );
+
+		if (
+			'1' === $blog_profile &&
+			'1' === $author_profiles
+		) {
+			\update_option( 'activitypub_actor_mode', ACTIVITYPUB_ACTOR_AND_BLOG_MODE );
+		} elseif (
+			'1' === $blog_profile &&
+			'1' !== $author_profiles
+		) {
+			\update_option( 'activitypub_actor_mode', ACTIVITYPUB_BLOG_MODE );
+		} elseif (
+			'1' !== $blog_profile &&
+			'1' === $author_profiles
+		) {
+			\update_option( 'activitypub_actor_mode', ACTIVITYPUB_ACTOR_MODE );
+		}
+	}
+}
