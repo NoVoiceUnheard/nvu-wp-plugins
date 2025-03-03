@@ -11,18 +11,18 @@ git clone https://github.com/NoVoiceUnheard/nvu-wp-plugins.git
 ```
 If you are working within the main WordPress repository using a Git subtree, the plugins folder is updated with:
 ```bash
-git subtree pull --prefix=wp-content/plugins https://github.com/NoVoiceUnheard/nvu-wp-plugins.git master --squash
+git subtree pull --prefix=wp-content/plugins https://github.com/NoVoiceUnheard/nvu-wp-plugins.git main --squash
 ```
 ## 🔧 Adding or Updating Plugins
 To add a new plugin, place it inside the wp-content/plugins/ folder and commit the changes:
 ```bash
 git add wp-content/plugins/new-plugin
 git commit -m "Added new-plugin"
-git push origin master
+git push origin main
 ```
 To push local plugin changes back to this repository from the main project:
 ```bash
-git subtree push --prefix=wp-content/plugins https://github.com/NoVoiceUnheard/nvu-wp-plugins.git master
+git subtree push --prefix=wp-content/plugins https://github.com/NoVoiceUnheard/nvu-wp-plugins.git main
 ```
 ## 🛠️ Installation & Usage
 1.	Ensure the wp-content/plugins/ directory contains the required plugins.
