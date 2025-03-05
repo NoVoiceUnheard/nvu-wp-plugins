@@ -22,7 +22,7 @@ git push origin main
 ```
 To push local plugin changes back to this repository from the main project:
 ```bash
-git subtree push --prefix=wp-content/plugins https://github.com/NoVoiceUnheard/nvu-wp-plugins.git main
+git subtree push --prefix=wp-content/plugins https://github.com/NoVoiceUnheard/nvu-wp-plugins.git updates
 ```
 ## 🛠️ Installation & Usage
 1.	Ensure the wp-content/plugins/ directory contains the required plugins.
