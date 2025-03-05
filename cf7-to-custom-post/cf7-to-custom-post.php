@@ -104,34 +104,95 @@ function cf7_register_submission_block() {
     );
 
     register_block_type('cf7/submission-block', array(
-        'editor_script' => 'cf7-submission-block',
-        'render_callback' => 'cf7_render_submission_block'
+        'editor_script'   => 'cf7-submission-block',
+        'render_callback' => 'cf7_render_submission_block',
+        'attributes'      => array(
+            'fields' => array(
+                'type'    => 'array',
+                'default' => array(),
+                'items'   => array('type' => 'string')
+            )
+        ),
     ));
 }
 add_action('init', 'cf7_register_submission_block');
 
 // Render the block output
-function cf7_render_submission_block() {
+function cf7_render_submission_block($attributes) {
+    $selected_fields = isset($attributes['fields']) ? $attributes['fields'] : array();
+
     $args = array(
-        'post_type' => 'submissions',
-        'post_status' => 'publish', // Only approved submissions
-        'numberposts' => 10
+        'post_type'      => 'cf7_submission',
+        'posts_per_page' => 5,
+        'post_status'    => 'publish',
+        'orderby'        => 'date',
+        'order'          => 'DESC'
     );
-    
-    $submissions = get_posts($args);
-    $output = '<div class="cf7-submission-list">';
-    
-    if ($submissions) {
-        foreach ($submissions as $submission) {
-            $output .= '<div class="cf7-submission-item">';
-            $output .= '<h3>' . esc_html($submission->post_title) . '</h3>';
-            $output .= '<p>' . esc_html($submission->post_content) . '</p>';
-            $output .= '</div>';
-        }
-    } else {
-        $output .= '<p>No approved submissions found.</p>';
+
+    $submissions = new WP_Query($args);
+
+    if (!$submissions->have_posts()) {
+        return '<div class="cf7-submission-block">No submissions found.</div>';
     }
-    
+
+    $output = '<div class="cf7-submission-block">';
+    $output .= '<h3>Recent Submissions</h3>';
+
+    while ($submissions->have_posts()) {
+        $submissions->the_post();
+        $output .= '<div class="cf7-submission">';
+        $output .= '<h4>' . esc_html(get_the_title()) . '</h4>';
+        $output .= '<ul>';
+
+        $meta_values = get_post_meta(get_the_ID());
+
+        foreach ($meta_values as $key => $value) {
+            if (!empty($selected_fields) && !in_array($key, $selected_fields)) {
+                continue; // Skip fields not selected
+            }
+
+            if (!empty($value)) {
+                $output .= '<li><strong>' . esc_html($key) . ':</strong> ' . esc_html(is_array($value) ? implode(', ', $value) : $value) . '</li>';
+            }
+        }
+
+        $output .= '</ul>';
+        $output .= '<small>Submitted on ' . get_the_date() . '</small>';
+        $output .= '</div>';
+    }
+
+    wp_reset_postdata();
+
     $output .= '</div>';
+
     return $output;
 }
+
+function cf7_get_submission_fields() {
+    $args = array(
+        'post_type'      => 'cf7_submission',
+        'posts_per_page' => 1,
+        'post_status'    => 'publish',
+    );
+
+    $query = new WP_Query($args);
+
+    if (!$query->have_posts()) {
+        return rest_ensure_response(array());
+    }
+
+    $query->the_post();
+    $fields = array_keys(get_post_meta(get_the_ID()));
+
+    wp_reset_postdata();
+    return rest_ensure_response($fields);
+}
+
+function cf7_register_api_routes() {
+    register_rest_route('cf7/v1', '/fields', array(
+        'methods'  => 'GET',
+        'callback' => 'cf7_get_submission_fields',
+    ));
+}
+
+add_action('rest_api_init', 'cf7_register_api_routes');
