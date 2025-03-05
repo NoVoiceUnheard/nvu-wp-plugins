@@ -192,6 +192,7 @@ function cf7_register_api_routes() {
     register_rest_route('cf7/v1', '/fields', array(
         'methods'  => 'GET',
         'callback' => 'cf7_get_submission_fields',
+        'permission_callback' => '__return_true',
     ));
 }
 
