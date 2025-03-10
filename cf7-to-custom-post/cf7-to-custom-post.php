@@ -10,13 +10,13 @@
 if (!defined('ABSPATH')) {
     exit;
 }
-function list_all_registered_post_types() {
-    $post_types = get_post_types(array(), 'names'); // Get all post types by name
-    echo '<pre>';
-    print_r($post_types); // Display all registered post types
-    echo '</pre>';
-}
-add_action('wp_footer', 'list_all_registered_post_types'); // Output to the footer
+// function list_all_registered_post_types() {
+//     $post_types = get_post_types(array(), 'names'); // Get all post types by name
+//     echo '<pre>';
+//     print_r($post_types); // Display all registered post types
+//     echo '</pre>';
+// }
+// add_action('wp_footer', 'list_all_registered_post_types'); // Output to the footer
 add_action('init', 'register_cf7_post_types_for_all_forms', 10);
 function register_cf7_post_types_for_all_forms() {
     // Get all CF7 forms using WPCF7_ContactForm::find() method
