@@ -3,7 +3,11 @@ Contributors: automattic, pfefferle, mattwiebe, obenland, akirk, jeherve, mediaf
 Tags: OStatus, fediverse, activitypub, activitystream
 Requires at least: 6.4
 Tested up to: 6.7
+<<<<<<< HEAD
 Stable tag: 5.4.1
+=======
+Stable tag: 5.4.0
+>>>>>>> 57ee6aa7e9c74bd23b34597408002fb25c196d12
 Requires PHP: 7.2
 License: MIT
 License URI: http://opensource.org/licenses/MIT
@@ -129,10 +133,13 @@ For reasons of data protection, it is not possible to see the followers of other
 
 == Changelog ==
 
+<<<<<<< HEAD
 = 5.4.1 =
 
 * Fixed: Transition handling of posts to ensure that `Create` and `Update` activities are properly processed.
 
+=======
+>>>>>>> 57ee6aa7e9c74bd23b34597408002fb25c196d12
 = 5.4.0 =
 
 * Added: Upgrade script to fix Follower json representations with unescaped backslashes.
