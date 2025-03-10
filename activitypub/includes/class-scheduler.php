@@ -439,10 +439,6 @@ class Scheduler {
 		}
 
 		// Schedule the outbox item for federation.
-<<<<<<< HEAD
 		self::schedule_outbox_activity_for_federation( $outbox_activity_id, 120 );
-=======
-		self::schedule_outbox_activity_for_federation( $outbox_activity_id, 30 );
->>>>>>> 57ee6aa7e9c74bd23b34597408002fb25c196d12
 	}
 }
