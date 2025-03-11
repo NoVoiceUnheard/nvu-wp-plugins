@@ -10,13 +10,13 @@
 if (!defined('ABSPATH')) {
     exit;
 }
-// function list_all_registered_post_types() {
-//     $post_types = get_post_types(array(), 'names'); // Get all post types by name
-//     echo '<pre>';
-//     print_r($post_types); // Display all registered post types
-//     echo '</pre>';
-// }
-// add_action('wp_footer', 'list_all_registered_post_types'); // Output to the footer
+function list_all_registered_post_types() {
+    $post_types = get_post_types(array(), 'names'); // Get all post types by name
+    echo '<pre>';
+    print_r($post_types); // Display all registered post types
+    echo '</pre>';
+}
+add_action('wp_footer', 'list_all_registered_post_types'); // Output to the footer
 add_action('init', 'register_cf7_post_types_for_all_forms', 10);
 function register_cf7_post_types_for_all_forms() {
     // Get all CF7 forms using WPCF7_ContactForm::find() method
@@ -36,7 +36,7 @@ function register_cf7_post_types_for_all_forms() {
             }
 
             // Create a unique post type slug based on the form ID
-            $post_type_slug = sanitize_title($form_title);
+            $post_type_slug = 'cf7_' . sanitize_title($form_title);
 
             // Check if the post type is already registered
             if (!post_type_exists($post_type_slug)) {
@@ -52,6 +52,7 @@ function register_cf7_post_types_for_all_forms() {
                     'supports' => array('title', 'editor', 'custom-fields'),
                     'show_in_menu' => true,
                     'capability_type' => 'post',
+                    'show_in_rest'  => true,
                 );
 
                 // Register the custom post type
@@ -97,7 +98,7 @@ function cf7_save_submission_to_post($contact_form) {
 
     // Get the form title to use as the post type
     $form_title = get_the_title($form_id);
-    $post_type = sanitize_title($form_title); // Convert form title to a slug-friendly post type
+    $post_type = 'cf7_' . sanitize_title($form_title); // Convert form title to a slug-friendly post type
     if (get_post_meta($form_id, '_cf7_save_submissions', true) !== 'yes') {
         return; // Skip if the option is disabled
     }
@@ -107,7 +108,7 @@ function cf7_save_submission_to_post($contact_form) {
         $posted_data = $submission->get_posted_data();
         
         // Set a default title if no specific field is set
-        $post_title = isset($posted_data['email']) ? sanitize_text_field($posted_data['email']) : 'Submission';
+        $post_title = isset($posted_data['title']) ? sanitize_text_field($posted_data['title']) : 'Submission';
         $post_content = isset($posted_data['description']) ? sanitize_textarea_field($posted_data['description']) : '';
 
         // Create a new post
@@ -132,22 +133,20 @@ function cf7_save_submission_to_post($contact_form) {
 }
 add_action('wpcf7_mail_sent', 'cf7_save_submission_to_post');
 
-// Register a Gutenberg block to display approved submissions
 function cf7_register_submission_block() {
     wp_register_script(
         'cf7-submission-block',
         plugins_url('block.js', __FILE__),
-        array('wp-blocks', 'wp-editor', 'wp-components', 'wp-element')
+        array('wp-blocks', 'wp-editor', 'wp-components', 'wp-element', 'wp-api-fetch')
     );
 
     register_block_type('cf7/submission-block', array(
         'editor_script'   => 'cf7-submission-block',
         'render_callback' => 'cf7_render_submission_block',
         'attributes'      => array(
-            'fields' => array(
-                'type'    => 'array',
-                'default' => array(),
-                'items'   => array('type' => 'string')
+            'postType' => array(
+                'type'    => 'string',
+                'default' => ''
             )
         ),
     ));
@@ -156,53 +155,31 @@ add_action('init', 'cf7_register_submission_block');
 
 // Render the block output
 function cf7_render_submission_block($attributes) {
-    $selected_fields = isset($attributes['fields']) ? $attributes['fields'] : array();
+    if (empty($attributes['postType'])) {
+        return '<p>Please select a form to display its submissions.</p>';
+    }
 
-    $args = array(
-        'post_type'      => 'cf7_submission',
-        'posts_per_page' => 5,
+    $query = new WP_Query(array(
+        'post_type'      => $attributes['postType'],
         'post_status'    => 'publish',
-        'orderby'        => 'date',
-        'order'          => 'DESC'
-    );
+        'posts_per_page' => 5
+    ));
 
-    $submissions = new WP_Query($args);
-
-    if (!$submissions->have_posts()) {
-        return '<div class="cf7-submission-block">No submissions found.</div>';
+    if (!$query->have_posts()) {
+        return '<p>No submissions found.</p>';
     }
 
-    $output = '<div class="cf7-submission-block">';
-    $output .= '<h3>Recent Submissions</h3>';
-
-    while ($submissions->have_posts()) {
-        $submissions->the_post();
-        $output .= '<div class="cf7-submission">';
-        $output .= '<h4>' . esc_html(get_the_title()) . '</h4>';
-        $output .= '<ul>';
-
-        $meta_values = get_post_meta(get_the_ID());
-
-        foreach ($meta_values as $key => $value) {
-            if (!empty($selected_fields) && !in_array($key, $selected_fields)) {
-                continue; // Skip fields not selected
-            }
-
-            if (!empty($value)) {
-                $output .= '<li><strong>' . esc_html($key) . ':</strong> ' . esc_html(is_array($value) ? implode(', ', $value) : $value) . '</li>';
-            }
+    $output = '<ul class="cf7-submission-list">';
+    while ($query->have_posts()) {
+        $query->the_post();
+        $custom_fields = get_post_meta(get_the_ID());
+        if (!empty($custom_fields)) {
+            $output .= '<li><h3>' . get_the_title() . '</h3><p>' . $custom_fields['location'][0] .'</p><p>' . get_the_excerpt() . '</p></li>';
         }
-
-        $output .= '</ul>';
-        $output .= '<small>Submitted on ' . get_the_date() . '</small>';
-        $output .= '</div>';
     }
-
     wp_reset_postdata();
 
-    $output .= '</div>';
-
-    return $output;
+    return $output . '</ul>';
 }
 
 function cf7_get_submission_fields() {

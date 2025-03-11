@@ -1,59 +1,76 @@
-(function () {
-    var el = wp.element.createElement;
+(function (wp) {
     var registerBlockType = wp.blocks.registerBlockType;
+    var createElement = wp.element.createElement;
+    var useState = wp.element.useState;
+    var useEffect = wp.element.useEffect;
+    var InspectorControls = wp.blockEditor.InspectorControls;
+    var SelectControl = wp.components.SelectControl;
+    var PanelBody = wp.components.PanelBody;
+    var apiFetch = wp.apiFetch;
 
-    registerBlockType("cf7/submission-block", {
-        title: "CF7 Submissions",
-        category: "widgets",
+    registerBlockType('cf7/submission-block', {
+        title: 'CF7 Submissions',
+        icon: 'list-view',
+        category: 'widgets',
         attributes: {
-            fields: {
-                type: "array",
-                default: [],
-            },
+            postType: {
+                type: 'string',
+                default: ''
+            }
         },
+
         edit: function (props) {
-            var selectedFields = props.attributes.fields || [];
+            var attributes = props.attributes;
+            var setAttributes = props.setAttributes;
 
-            function updateFields(event) {
-                var field = event.target.value;
-                if (event.target.checked) {
-                    selectedFields.push(field);
-                } else {
-                    selectedFields = selectedFields.filter(f => f !== field);
-                }
-                props.setAttributes({ fields: selectedFields });
-            }
+            var _useState = useState([]),
+                postTypes = _useState[0],
+                setPostTypes = _useState[1];
 
-            function fetchFields(callback) {
-                fetch("/wp-json/cf7/v1/fields")
-                    .then((response) => response.json())
-                    .then(callback);
-            }
+            useEffect(function () {
+                apiFetch({ path: '/wp/v2/types' }).then(function (types) {
+                    var formPostTypes = Object.keys(types).filter(function (type) {
+                        return type.startsWith('cf7_');
+                    });
+                    setPostTypes(formPostTypes);
+                });
+            }, []);
 
-            var fieldOptions = el("div", {}, "Loading fields...");
-
-            fetchFields(function (fields) {
-                fieldOptions = el(
-                    "div",
+            return createElement(
+                'div',
+                {},
+                createElement(
+                    InspectorControls,
                     {},
-                    fields.map(function (field) {
-                        return el("label", {},
-                            el("input", {
-                                type: "checkbox",
-                                value: field,
-                                checked: selectedFields.includes(field),
-                                onChange: updateFields
-                            }),
-                            " " + field
-                        );
-                    })
-                );
-            });
-
-            return el("div", {}, el("p", {}, "CF7 Submission Block - Configure fields in settings"), fieldOptions);
+                    createElement(
+                        PanelBody,
+                        { title: 'Form Selector' },
+                        createElement(SelectControl, {
+                            label: 'Select Form',
+                            value: attributes.postType,
+                            options: [{ label: 'Select a form...', value: '' }].concat(
+                                postTypes.map(function (type) {
+                                    return { label: type.replace('cf7_', ''), value: type };
+                                })
+                            ),
+                            onChange: function (value) {
+                                setAttributes({ postType: value });
+                            }
+                        })
+                    )
+                ),
+                createElement(
+                    'p',
+                    {},
+                    attributes.postType
+                        ? 'Displaying submissions for: ' + attributes.postType
+                        : 'Select a form to display submissions.'
+                )
+            );
         },
+
         save: function () {
             return null; // Uses PHP render_callback
         }
     });
-})();
+})(window.wp);
