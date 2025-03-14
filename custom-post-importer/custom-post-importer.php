@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: Organization CSV Importer
+ * Plugin Name: Custom Post CSV Importer
  * Description: Adds a CSV import feature to the Organizations post type menu.
  * Version: 1.0
  * Author: NoVoiceUnheard
@@ -10,16 +10,19 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Add "Import CSV" Submenu under "Organizations"
+// Add "Import CSV" Submenu under custom post menus
 function csv_importer_add_submenu() {
-    add_submenu_page(
-        'edit.php?post_type=cf7_organizations', // Parent menu (Organizations)
-        'Import Organizations',
-        'Import CSV',
-        'manage_options',
-        'import-organizations',
-        'csv_importer_upload_page'
-    );
+    $post_types = array('organizations','protest-listing');
+    foreach($post_types as $type) {
+        add_submenu_page(
+            'edit.php?post_type=cf7_' . $type, // Parent menu (Organizations)
+            'Import ' . ucwords($type),
+            'Import CSV',
+            'manage_options',
+            'import-' . $type,
+            'csv_importer_upload_page'
+        );
+    }
 }
 add_action('admin_menu', 'csv_importer_add_submenu');
 
@@ -27,7 +30,7 @@ add_action('admin_menu', 'csv_importer_add_submenu');
 function csv_importer_upload_page() {
     ?>
     <div class="wrap">
-        <h1>Import Organizations from CSV</h1>
+        <h1>Import from CSV</h1>
         <form method="post" enctype="multipart/form-data" action="">
             <input type="file" name="csv_file" accept=".csv" required>
             <input type="hidden" name="csv_upload_nonce" value="<?php echo wp_create_nonce('csv_upload_action'); ?>">
@@ -38,13 +41,14 @@ function csv_importer_upload_page() {
 
     // Process the file only when the form is submitted
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
-        csv_importer_handle_upload();
+        $type = $_GET['post_type'];
+        csv_importer_handle_upload($type);
     }
 }
 
 
 // Process the CSV and Insert Data
-function csv_importer_handle_upload() {
+function csv_importer_handle_upload($type) {
     if (!current_user_can('manage_options')) {
         wp_die('Unauthorized access');
     }
@@ -85,7 +89,17 @@ function csv_importer_handle_upload() {
         fclose($handle);
         return;
     }
+    if ($type == 'cf7_organizations') {
+        process_organizations($handle, $headers);
+    } else if ($type == 'cf7_protest-listing') {
+        process_protest_listing($handle, $headers);
+    }
 
+    fclose($handle);
+    echo '<p style="color: green;">CSV Imported Successfully!</p>';
+}
+
+function process_organizations($handle, $headers) {
     // Process each row
     while (($data = fgetcsv($handle)) !== false) {
         $mapped_data = array_combine($headers, $data);
@@ -94,7 +108,7 @@ function csv_importer_handle_upload() {
             continue;
         }
 
-        // Insert into 'organizations' post type
+        // Insert into 'cf7_organizations' post type
         $post_data = array(
             'post_title'   => sanitize_text_field($mapped_data['Organization Name']),
             'post_content' => sanitize_textarea_field($mapped_data['Short description']),
@@ -112,7 +126,32 @@ function csv_importer_handle_upload() {
             }
         }
     }
+}
+function process_protest_listing($handle, $headers) {
+    // Process each row
+    while (($data = fgetcsv($handle)) !== false) {
+        $mapped_data = array_combine($headers, $data);
 
-    fclose($handle);
-    echo '<p style="color: green;">CSV Imported Successfully!</p>';
+        if (!$mapped_data || !isset($mapped_data['Event Title'])) {
+            continue;
+        }
+
+        // Insert into 'cf7_protest-listing' post type
+        $post_data = array(
+            'post_title'   => sanitize_text_field($mapped_data['Event Title']),
+            'post_content' => sanitize_textarea_field($mapped_data['Event Description']),
+            'post_type'    => 'cf7_protest-listing',
+            'post_status'  => 'publish',
+        );
+
+        $post_id = wp_insert_post($post_data);
+
+        if ($post_id) {
+            foreach ($mapped_data as $key => $value) {
+                if ($key !== 'Event Title' && $key !== 'Event Description') {
+                    update_post_meta($post_id, sanitize_key($key), sanitize_text_field($value));
+                }
+            }
+        }
+    }
 }
