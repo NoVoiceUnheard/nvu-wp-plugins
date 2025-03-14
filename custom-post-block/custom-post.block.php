@@ -65,16 +65,23 @@ function cf7_render_submission_block($attributes) {
     if (empty($attributes['postType'])) {
         return '<p>Please select a form to display its submissions.</p>';
     }
+    $search = isset($_GET['q']) ? sanitize_text_field($_GET['q']) : '';
     $paged = (get_query_var('paged')) ? get_query_var('paged') : 1;
+    $meta_query = array();
     if ($attributes['postType'] == 'cf7_protest-listing') {
         $metakey = 'dateandtime';
-        $metaquery = array(
-            array(
-                'key'     => 'dateandtime',
-                'value'   => current_time('mysql'), // Current date/time in WP format
-                'compare' => '>=', // Only get future events
-                'type'    => 'DATETIME',
-            ),
+        if (!empty($search)) {
+            $meta_query[] = array(
+                'key'     => 'multi-lineaddress',
+                'value'   => $search,
+                'compare' => 'LIKE', // Searches for the state within the multi-line address
+            );
+        }
+        $meta_query[] = array(
+            'key'     => 'dateandtime',
+            'value'   => current_time('mysql'), // Current date/time in WP format
+            'compare' => '>=', // Only get future events
+            'type'    => 'DATETIME',
         );
         $orderby = 'meta_value';
         $query = array(
@@ -85,8 +92,7 @@ function cf7_render_submission_block($attributes) {
             'orderby'        => $orderby,
             'order'          => 'ASC',
             'paged'          => $paged,
-            'meta_type'      => 'DATETIME',
-            'meta_query'     => $metaquery,
+            'meta_query'     => $meta_query,
         );
     } else if ($attributes['postType'] == 'cf7_organizations') {
         $orderby = 'title';
@@ -104,8 +110,11 @@ function cf7_render_submission_block($attributes) {
     if (!$query->have_posts()) {
         return '<p>No submissions found.</p>';
     }
-
-    $output = '<ul class="cf7-submission-list">';
+    $seach_results = '';
+    if (!empty($search)) {
+        $seach_results = '<p>Results found for: ' . $search;
+    }
+    $output = $seach_results . '<ul class="cf7-submission-list">';
     while ($query->have_posts()) {
         $query->the_post();
         $custom_fields = get_post_meta(get_the_ID());
