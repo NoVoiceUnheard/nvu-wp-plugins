@@ -40,7 +40,60 @@ function cf7_register_api_routes() {
 }
 
 add_action('rest_api_init', 'cf7_register_api_routes');
+function register_custom_tag_dropdown_block() {
+    wp_register_script(
+        'custom-tag-dropdown-block',
+        plugins_url('block.js', __FILE__),
+        array('wp-blocks', 'wp-editor', 'wp-components', 'wp-data'),
+        filemtime(plugin_dir_path(__FILE__) . 'block.js')
+    );
 
+    register_block_type('custom/tag-dropdown', array(
+        'editor_script' => 'custom-tag-dropdown-block',
+        'render_callback' => 'render_custom_tag_dropdown',
+    ));
+}
+add_action('init', 'register_custom_tag_dropdown_block');
+
+function render_custom_tag_dropdown($attributes) {
+    $terms = get_terms(array(
+        'taxonomy' => 'post_tag',
+        'hide_empty' => false,
+    ));
+
+    if (empty($terms) || is_wp_error($terms)) {
+        return '<p>No tags found.</p>';
+    }
+    // Get the selected tag from the URL query parameter
+    $selected_tag = isset($_GET['q']) ? esc_attr($_GET['q']) : '';
+
+    ob_start();
+    ?>
+    <select name="post_tags" id="post-tags-dropdown">
+        <option value="">Filter by state</option>
+        <?php foreach ($terms as $term): ?>
+            <option value="<?php echo esc_attr($term->name); ?>"
+                <?php selected($selected_tag, $term->name); ?>>
+                <?php echo esc_html($term->name); ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var dropdown = document.getElementById("post-tags-dropdown");
+            dropdown.addEventListener("change", function() {
+                var selectedTag = this.value;
+                if (selectedTag) {
+                    window.location.href = "<?php echo parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);  ?>/?q=" + encodeURIComponent(selectedTag);
+                } else {
+                    window.location.href = "<?php echo parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);  ?>";
+                }
+            });
+        });
+    </script>
+    <?php
+    return ob_get_clean();
+}
 function cf7_register_submission_block() {
     wp_register_script(
         'cf7-submission-block',
@@ -70,11 +123,12 @@ function cf7_render_submission_block($attributes) {
     $meta_query = array();
     if ($attributes['postType'] == 'cf7_protest-listing') {
         $metakey = 'dateandtime';
+        $tax_query = [];
         if (!empty($search)) {
-            $meta_query[] = array(
-                'key'     => 'multi-lineaddress',
-                'value'   => $search,
-                'compare' => 'LIKE', // Searches for the state within the multi-line address
+            $tax_query[] = array(
+                'taxonomy' => 'post_tag', // Use post_tag taxonomy
+                'field'    => 'name', // You can use 'slug' if needed
+                'terms'    => $search, // The tag name you're searching for
             );
         }
         $meta_query[] = array(
@@ -92,9 +146,18 @@ function cf7_render_submission_block($attributes) {
             'orderby'        => $orderby,
             'order'          => 'ASC',
             'paged'          => $paged,
+            'tax_query'      => $tax_query,
             'meta_query'     => $meta_query,
         );
     } else if ($attributes['postType'] == 'cf7_organizations') {
+        $tax_query = [];
+        if (!empty($search)) {
+            $tax_query[] = array(
+                'taxonomy' => 'post_tag', // Use post_tag taxonomy
+                'field'    => 'name', // You can use 'slug' if needed
+                'terms'    => $search, // The tag name you're searching for
+            );
+        }
         $orderby = 'title';
         $query = array(
             'post_type'      => $attributes['postType'],
@@ -103,6 +166,7 @@ function cf7_render_submission_block($attributes) {
             'orderby'        => $orderby,
             'order'          => 'ASC',
             'paged'          => $paged,
+            'tax_query'      => $tax_query,
         );
     }
     $query = new WP_Query($query);
@@ -118,6 +182,7 @@ function cf7_render_submission_block($attributes) {
     while ($query->have_posts()) {
         $query->the_post();
         $custom_fields = get_post_meta(get_the_ID());
+        $tags = get_the_terms(get_the_ID(), 'post_tag'); // Get tags for the post
         $datetime_string = '';
         $location_string = '';
         $organizer_string = '';
@@ -136,6 +201,14 @@ function cf7_render_submission_block($attributes) {
         if (!empty($custom_fields['organizer'])) {
             $organizer_string = '<h4>' . $custom_fields['organizer'][0] . '</h4>';
         }
+        $tag_string = '';
+        if (!empty($tags) && !is_wp_error($tags)) {
+            foreach ($tags as $tag) {
+                $tag_string .= '<span class="tag"><a href="' . parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) . '?q=' . esc_html($tag->name) . '">#' . esc_html($tag->name) . '</a></span>'; // Output tag name
+            }
+        } else {
+            $tag_string = '<span class="no-tags">No tags assigned</span>';
+        }
         if (!empty($custom_fields)) {
             $output .= '<li>' . 
             $datetime_string .
@@ -144,6 +217,7 @@ function cf7_render_submission_block($attributes) {
             '<h3>' . get_the_title() . '</h3>' . 
             '<p>' . get_the_excerpt() . '</p>' . 
             $location_string .
+            $tag_string .
             '</div>' . 
             '</li>';
         }

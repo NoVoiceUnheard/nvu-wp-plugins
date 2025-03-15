@@ -7,6 +7,7 @@
     var SelectControl = wp.components.SelectControl;
     var PanelBody = wp.components.PanelBody;
     var apiFetch = wp.apiFetch;
+    var select = wp.data.select;
 
     registerBlockType('cf7/submission-block', {
         title: 'CF7 Submissions',
@@ -73,4 +74,34 @@
             return null; // Uses PHP render_callback
         }
     });
+    registerBlockType("custom/tag-dropdown", {
+        title: "Tag Dropdown",
+        category: "widgets",
+        icon: "filter",
+
+        edit: function () {
+            // Get all post tags
+            let tags = select("core").getEntityRecords("taxonomy", "post_tag", { per_page: -1 });
+            // Create a select dropdown
+            let selectElement = createElement(
+                "select",
+                {
+                    id: "tag-dropdown-editor"
+                },
+                [
+                    createElement("option", { value: "" }, "Select a tag"),
+                    ...(tags ? tags.map(tag => createElement("option", { value: tag.name }, tag.name)) : [])
+                ]
+            );
+
+            return createElement("div", {}, selectElement);
+        },
+
+        save: function () {
+            return null; // Rendered dynamically via PHP
+        }
+    });
 })(window.wp);
+
+
+

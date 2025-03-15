@@ -100,6 +100,22 @@ function csv_importer_handle_upload($type) {
 }
 
 function process_organizations($handle, $headers) {
+    // State name to abbreviation map (keys will always be lowercase)
+    $state_map = array_change_key_case(array(
+        'Alabama' => 'AL', 'Alaska' => 'AK', 'Arizona' => 'AZ', 'Arkansas' => 'AR',
+        'California' => 'CA', 'Colorado' => 'CO', 'Connecticut' => 'CT', 'Delaware' => 'DE',
+        'Florida' => 'FL', 'Georgia' => 'GA', 'Hawaii' => 'HI', 'Idaho' => 'ID',
+        'Illinois' => 'IL', 'Indiana' => 'IN', 'Iowa' => 'IA', 'Kansas' => 'KS',
+        'Kentucky' => 'KY', 'Louisiana' => 'LA', 'Maine' => 'ME', 'Maryland' => 'MD',
+        'Massachusetts' => 'MA', 'Michigan' => 'MI', 'Minnesota' => 'MN', 'Mississippi' => 'MS',
+        'Missouri' => 'MO', 'Montana' => 'MT', 'Nebraska' => 'NE', 'Nevada' => 'NV',
+        'New Hampshire' => 'NH', 'New Jersey' => 'NJ', 'New Mexico' => 'NM', 'New York' => 'NY',
+        'North Carolina' => 'NC', 'North Dakota' => 'ND', 'Ohio' => 'OH', 'Oklahoma' => 'OK',
+        'Oregon' => 'OR', 'Pennsylvania' => 'PA', 'Rhode Island' => 'RI', 'South Carolina' => 'SC',
+        'South Dakota' => 'SD', 'Tennessee' => 'TN', 'Texas' => 'TX', 'Utah' => 'UT',
+        'Vermont' => 'VT', 'Virginia' => 'VA', 'Washington' => 'WA', 'West Virginia' => 'WV',
+        'Wisconsin' => 'WI', 'Wyoming' => 'WY'
+    ), CASE_LOWER); // Convert keys to lowercase
     // Process each row
     while (($data = fgetcsv($handle)) !== false) {
         $mapped_data = array_combine($headers, $data);
@@ -124,6 +140,19 @@ function process_organizations($handle, $headers) {
                     update_post_meta($post_id, sanitize_key($key), sanitize_text_field($value));
                 }
             }
+        }
+        // **Check for the 'state' field and assign it as a tag**
+        if (!empty($mapped_data['State'])) {
+            $state_name = trim($mapped_data['State']);
+            $state_key = strtolower($state_name); // Convert input to lowercase for matching
+            $state_abbr = isset($state_map[$state_key]) ? $state_map[$state_key] : $state_name; // Normalize state
+            // Ensure the term exists, create if not
+            $term = term_exists($state_abbr, 'post_tag'); 
+            if (!$term) {
+                $term = wp_insert_term($state_abbr, 'post_tag'); // Create tag if not exists
+            }
+            wp_set_post_terms($post_id, $state_abbr, 'post_tag', true); 
+            // 'post_tag' is the default WP tag taxonomy. If using a custom taxonomy, change it accordingly.
         }
     }
 }
@@ -153,5 +182,39 @@ function process_protest_listing($handle, $headers) {
                 }
             }
         }
+
+        // **Check for Multi-line Address field and extract city/state**
+        if (!empty($mapped_data['Multi-line address'])) {
+            $address = sanitize_text_field($mapped_data['Multi-line address']);
+            $location_tag = extract_state_from_address($address);
+
+            if (!empty($location_tag)) {
+                // Ensure the term exists, create if not
+                $term = term_exists($location_tag, 'post_tag'); 
+                if (!$term) {
+                    $term = wp_insert_term($location_tag, 'post_tag'); 
+                }
+                wp_set_post_terms($post_id, $location_tag, 'post_tag', true);
+            }
+        }
+        
     }
+}
+// **Extract city or state from the address**
+function extract_state_from_address($address) {
+    // List of all state abbreviations
+    $state_abbreviations = array(
+        "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+        "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+        "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+        "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+        "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"
+    );
+
+    // Match the first valid state abbreviation (two uppercase letters, after a comma or space)
+    if (preg_match('/\b(' . implode('|', $state_abbreviations) . ')\b/', $address, $matches)) {
+        return $matches[1]; // Return the first matched state abbreviation
+    }
+
+    return ''; // Return empty if no state abbreviation is found
 }
