@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Custom Post Type Block
  * Description: Displays custom post types in gutenberg editor.
- * Version: 1.2
+ * Version: 1.3
  * Author: NoVoiceUnheard
  */
 
