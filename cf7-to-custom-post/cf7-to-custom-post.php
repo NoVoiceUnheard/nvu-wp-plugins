@@ -49,10 +49,11 @@ function register_cf7_post_types_for_all_forms() {
                     'public' => true,
                     'show_ui' => true,
                     'has_archive' => true,
-                    'supports' => array('title', 'editor', 'custom-fields'),
+                    'supports' => array('title', 'editor', 'custom-fields', 'tags'),
                     'show_in_menu' => true,
                     'capability_type' => 'post',
                     'show_in_rest'  => true,
+                    'taxonomies'    => array('post_tag'),
                 );
 
                 // Register the custom post type

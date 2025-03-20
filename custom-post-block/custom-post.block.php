@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Custom Post Type Block
  * Description: Displays custom post types in gutenberg editor.
- * Version: 1.0
+ * Version: 1.3
  * Author: NoVoiceUnheard
  */
 
@@ -40,7 +40,63 @@ function cf7_register_api_routes() {
 }
 
 add_action('rest_api_init', 'cf7_register_api_routes');
+function register_custom_tag_dropdown_block() {
+    wp_register_script(
+        'custom-tag-dropdown-block',
+        plugins_url('block.js', __FILE__),
+        array('wp-blocks', 'wp-editor', 'wp-components', 'wp-data'),
+        filemtime(plugin_dir_path(__FILE__) . 'block.js')
+    );
 
+    register_block_type('custom/tag-dropdown', array(
+        'editor_script' => 'custom-tag-dropdown-block',
+        'render_callback' => 'render_custom_tag_dropdown',
+    ));
+}
+add_action('init', 'register_custom_tag_dropdown_block');
+
+function render_custom_tag_dropdown($attributes) {
+    $terms = get_terms(array(
+        'taxonomy' => 'post_tag',
+        'hide_empty' => false,
+    ));
+
+    if (empty($terms) || is_wp_error($terms)) {
+        return '<p>No tags found.</p>';
+    }
+    // Get the selected tag from the URL query parameter
+    $selected_tag = isset($_GET['q']) ? esc_attr($_GET['q']) : '';
+
+    ob_start();
+    ?>
+    <select name="post_tags" id="post-tags-dropdown" class="<?php echo !empty($attributes['customClass']) ?? $attributes['customClass']; ?>">
+        <option value="">Filter by state</option>
+        <?php foreach ($terms as $term): ?>
+            <option value="<?php echo esc_attr($term->name); ?>"
+                <?php selected($selected_tag, $term->name); ?>>
+                <?php echo esc_html($term->name); ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+    <script>
+        jQuery(document).ready(function() {
+            // Initialize Select2
+            jQuery("#post-tags-dropdown").select2();
+
+            // Listen for the Select2 change event
+            jQuery("#post-tags-dropdown").on("select2:select", function(e) {
+                var selectedTag = e.params.data.id; // Get selected value
+                if (selectedTag) {
+                    window.location.href = "<?php echo esc_url(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH)); ?>?q=" + encodeURIComponent(selectedTag);
+                } else {
+                    window.location.href = "<?php echo esc_url(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH)); ?>";
+                }
+            });
+        });
+    </script>
+    <?php
+    return ob_get_clean();
+}
 function cf7_register_submission_block() {
     wp_register_script(
         'cf7-submission-block',
@@ -69,32 +125,51 @@ function cf7_render_submission_block($attributes) {
     $paged = (get_query_var('paged')) ? get_query_var('paged') : 1;
     $meta_query = array();
     if ($attributes['postType'] == 'cf7_protest-listing') {
-        $metakey = 'dateandtime';
+        $tax_query = [];
         if (!empty($search)) {
-            $meta_query[] = array(
-                'key'     => 'multi-lineaddress',
-                'value'   => $search,
-                'compare' => 'LIKE', // Searches for the state within the multi-line address
+            $tax_query[] = array(
+                'taxonomy' => 'post_tag', // Use post_tag taxonomy
+                'field'    => 'name', // You can use 'slug' if needed
+                'terms'    => $search, // The tag name you're searching for
             );
         }
-        $meta_query[] = array(
-            'key'     => 'dateandtime',
-            'value'   => current_time('mysql'), // Current date/time in WP format
-            'compare' => '>=', // Only get future events
-            'type'    => 'DATETIME',
+        // Meta query to check either 'dateandtime' or 'starttime'
+        $current_time_minus_24 = date('Y-m-d H:i:s', strtotime('-24 hours'));
+        $meta_query = array(
+            'relation' => 'OR', // Ensures at least one of the conditions is met
+            array(
+                'key'     => 'dateandtime',
+                'value'   => $current_time_minus_24, // Current date/time in WP format
+                'compare' => '>=', // Only get future events
+                'type'    => 'DATETIME',
+            ),
+            array(
+                'key'     => 'startdate',
+                'value'   => $current_time_minus_24,
+                'compare' => '>=',
+                'type'    => 'DATETIME',
+            )
         );
         $orderby = 'meta_value';
         $query = array(
             'post_type'      => $attributes['postType'],
             'post_status'    => 'publish',
             'posts_per_page' => 10,
-            'meta_key'       => $metakey,
             'orderby'        => $orderby,
             'order'          => 'ASC',
             'paged'          => $paged,
             'meta_query'     => $meta_query,
+            'tax_query'      => $tax_query,
         );
     } else if ($attributes['postType'] == 'cf7_organizations') {
+        $tax_query = [];
+        if (!empty($search)) {
+            $tax_query[] = array(
+                'taxonomy' => 'post_tag', // Use post_tag taxonomy
+                'field'    => 'name', // You can use 'slug' if needed
+                'terms'    => $search, // The tag name you're searching for
+            );
+        }
         $orderby = 'title';
         $query = array(
             'post_type'      => $attributes['postType'],
@@ -103,6 +178,7 @@ function cf7_render_submission_block($attributes) {
             'orderby'        => $orderby,
             'order'          => 'ASC',
             'paged'          => $paged,
+            'tax_query'      => $tax_query,
         );
     }
     $query = new WP_Query($query);
@@ -118,36 +194,73 @@ function cf7_render_submission_block($attributes) {
     while ($query->have_posts()) {
         $query->the_post();
         $custom_fields = get_post_meta(get_the_ID());
+        $tags = get_the_terms(get_the_ID(), 'post_tag'); // Get tags for the post
+        
+        // Check if the email should be displayed
+        $is_organizer_email = !empty($custom_fields['isthistheorganizersemail'][0]) 
+            && !empty($custom_fields['email'][0]) 
+            && strtolower($custom_fields['isthistheorganizersemail'][0]) === 'yes';
+        $organizer = !empty($custom_fields['organizer'][0]) ? esc_html($custom_fields['organizer'][0]) : null;
+        $legacy_address = !empty($custom_fields['multi-lineaddress'][0]) ? esc_html($custom_fields['multi-lineaddress'][0]) : null;
+        $city = !empty($custom_fields['city']) ? esc_html($custom_fields['city'][0]) : '';
+        $state = !empty($custom_fields['state']) ? esc_html($custom_fields['state'][0]) : '';
+        $location = !empty($custom_fields['location']) ? esc_html($custom_fields['location'][0]) : null;
+        $address = $legacy_address ?? $location ?? $city . ', ' . $state;
+        $date_time = !empty($custom_fields['dateandtime']) ? esc_html($custom_fields['dateandtime'][0]) : null;
+        $legacy_link = !empty($custom_fields['externalsinguplistinglink']) ? esc_url($custom_fields['externalsinguplistinglink'][0]) : null;
+        $signup_link = !empty($custom_fields['external-link']) ? esc_url($custom_fields['external-link'][0]) : null;
+        $email = $is_organizer_email ? esc_html($custom_fields['email'][0]) : null;
+        $image_url = !empty($custom_fields['file-upload']) ? esc_url($custom_fields['file-upload'][0]) : null;
+        $legacy_img = !empty($custom_fields['uploadflyershere']) ? esc_url($custom_fields['uploadflyershere'][0]) : null;
+        $legacy_logo = !empty($custom_fields['logoupload']) ? esc_url($custom_fields['logoupload'][0]) : null;
+        $website = !empty($custom_fields['website']) ? esc_url($custom_fields['website'][0]) : null;
+        
+        // Format the date/time
+        $datetime = null;
+        $timestamp = null;
         $datetime_string = '';
         $location_string = '';
         $organizer_string = '';
-        if (!empty($custom_fields['location'])) {
-            $location = $custom_fields['location'];
-        } else if (!empty($custom_fields['multi-lineaddress'])) {
-            $location = $custom_fields['multi-lineaddress'];
+        if ($address) {
+            $location_string = '<p class="location">' . $address . '</p>';
         }
-        if (!empty($location)) {
-            $location_string = '<p class="location">' . $location[0] . '</p>';
+        if (!empty($date_time)) {
+            $datetime = new DateTime($date_time);
         }
-        if (!empty($custom_fields['dateandtime'])) {
-            $datetime = new DateTime($custom_fields['dateandtime'][0]);
+        $starttime = null;
+        if (!empty($custom_fields['startdate'])) {
+            $starttime = !empty($custom_fields['starttime']) ? $custom_fields['starttime'][0] : null;
+            $datetime = new DateTime($custom_fields['startdate'][0] . ' ' . $starttime);
+        }
+        if ($datetime) {
             $datetime_string = '<div class="submission-date"><p>' . $datetime->format("j M \r\n g:i A") . '</p></div>';
+            $timestamp = $datetime->getTimestamp();
         }
-        if (!empty($custom_fields['organizer'])) {
-            $organizer_string = '<h4>' . $custom_fields['organizer'][0] . '</h4>';
+        if ($organizer) {
+            $organizer_string = '<h4 class="organizer">' . $organizer . '</h4>';
+        }
+        $tag_string = '';
+        if (!empty($tags) && !is_wp_error($tags)) {
+            foreach ($tags as $tag) {
+                $tag_string .= '<span class="tag"><a href="' . parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) . '?q=' . esc_html($tag->name) . '">#' . esc_html($tag->name) . '</a></span>'; // Output tag name
+            }
+        } else {
+            $tag_string = '<span class="no-tags">No tags assigned</span>';
         }
         if (!empty($custom_fields)) {
-            $output .= '<li>' . 
+            $output .= '<li class="cf7-submission-item" data-id="' . get_the_ID() . '" data-email="' . $email . '" data-link="' . ($legacy_link ?? $signup_link) . '" data-timestamp="' . $timestamp . '" data-image="'. ($legacy_img ?? $image_url ?? $legacy_logo) .'" data-website="' . $website . '">' . 
             $datetime_string .
             '<div class="submission-content">' . 
             $organizer_string .
-            '<h3>' . get_the_title() . '</h3>' . 
-            '<p>' . get_the_excerpt() . '</p>' . 
+            '<h3 class="title">' . get_the_title() . '</h3>' . 
+            '<p class="content">' . get_the_excerpt() . '</p>' . 
             $location_string .
+            $tag_string .
             '</div>' . 
             '</li>';
         }
     }
+    $output .= '</ul>';
     $output .= '<div class="pagination">' . paginate_links(array(
         'total'   => $query->max_num_pages,
         'current' => max(1, get_query_var('paged')),
@@ -155,7 +268,73 @@ function cf7_render_submission_block($attributes) {
         'prev_text' => '« Previous',
         'next_text' => 'Next »',
     )) . '</div>';
+
+    // Include JavaScript for modal functionality
+    $output .= '<script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // Create and inject modal into the body
+            const modalHTML = `
+                <div id="submission-modal" class="cf7-modal" style="display:none;">
+                    <div class="cf7-modal-content">
+                        <span class="cf7-close">&times;</span>
+                        <div id="modal-body"></div>
+                    </div>
+                </div>`;
+            document.body.insertAdjacentHTML("beforeend", modalHTML);
+            const items = document.querySelectorAll(".cf7-submission-item");
+            const modal = document.getElementById("submission-modal");
+            const modalBody = document.getElementById("modal-body");
+            const closeModal = document.querySelector(".cf7-close");
+
+            items.forEach(item => {
+                item.addEventListener("click", function() {
+                    let postId = this.getAttribute("data-id");
+                    let title = this.querySelector(".title").innerHTML;
+                    let address = this.querySelector(".location").outerHTML;
+                    let content = this.querySelector(".content").outerHTML;
+                    let email = this.getAttribute("data-email");
+                    let organizer = this.querySelector(".organizer") && this.querySelector(".organizer").innerHTML;
+                    let date_time = this.querySelector(".submission-date") && this.querySelector(".submission-date").outerHTML;
+                    let timestamp = this.getAttribute("data-timestamp");
+                    let externalLink = this.getAttribute("data-link");
+                    let image = this.getAttribute("data-image");
+                    let website = this.getAttribute("data-website");
+
+                    let organizer_string = (email ? "<a href=\"mailto:" + email + "\">" + organizer + "</a>" : organizer);
+                    let date_string = date_time ? `<h4>Date & Time:</h4> <time datetime="${timestamp || null}">${date_time}</time>` : null;
+                    
+                    modalBody.innerHTML = `
+                        ${image ? `
+                        <div class="image">
+                            <img src="${image}" width="auto" height="auto" />
+                        </div>` : ""}
+                        <h2>${title}</h2>
+                        ${website ? `<p><a href="${website}" target="_blank" rel="noopener noreferrer">Website</a></p>` : ""}
+                        ${organizer_string && `<h4>Organizer:</h4> <p>${organizer_string}</p>` || \'\'}
+                        <h4>Location:</h4> <address>${address}</address>
+                        ${date_string ? date_string : ""}
+                        ${content}
+                        ${externalLink ? `<p><a href="${externalLink}" target="_blank" rel="noopener noreferrer">Sign Up</a></p>` : ""}
+                    `;
+                    modal.style.display = "flex";
+                    document.body.style.overflow = "hidden"; // Prevents body scrolling
+                });
+            });
+
+            closeModal.addEventListener("click", function() {
+                modal.style.display = "none";
+                document.body.style.overflow = ""; // Re-enables body scrolling
+            });
+
+            window.addEventListener("click", function(event) {
+                if (event.target === modal) {
+                    modal.style.display = "none";
+                    document.body.style.overflow = ""; // Re-enables body scrolling
+                }
+            });
+        });
+    </script>';
     wp_reset_postdata();
 
-    return $output . '</ul>';
+    return $output;
 }
