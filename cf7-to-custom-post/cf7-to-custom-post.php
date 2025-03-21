@@ -18,7 +18,9 @@ if (!defined('ABSPATH')) {
 // }
 // add_action('wp_footer', 'list_all_registered_post_types'); // Output to the footer
 add_action('init', 'register_cf7_post_types_for_all_forms', 10);
+$custom_posts = array();
 function register_cf7_post_types_for_all_forms() {
+    global $custom_posts;
     // Get all CF7 forms using WPCF7_ContactForm::find() method
     $contact_forms = WPCF7_ContactForm::find();
 
@@ -37,7 +39,7 @@ function register_cf7_post_types_for_all_forms() {
 
             // Create a unique post type slug based on the form ID
             $post_type_slug = 'cf7_' . sanitize_title($form_title);
-
+            $custom_posts[] = $post_type_slug;
             // Check if the post type is already registered
             if (!post_type_exists($post_type_slug)) {
                 // Register a post type for each form
@@ -62,6 +64,30 @@ function register_cf7_post_types_for_all_forms() {
         }
     }
 }
+function jetpack_include_custom_post_types($allowed_post_types) {
+    global $custom_posts;
+    return array_merge($allowed_post_types, $custom_posts);
+}
+add_filter('jetpack_sync_post_types', 'jetpack_include_custom_post_types');
+
+function add_custom_post_types_to_rss_feed($query) {
+    global $custom_posts;
+    if ($query->is_feed() && $query->is_main_query()) {
+        $query->set('post_type', array_merge(array('post'), $custom_posts));
+    }
+}
+add_action('pre_get_posts', 'add_custom_post_types_to_rss_feed');
+
+// Optional: Customize RSS content
+function custom_rss_content($content) {
+    if (get_post_type() == 'your_custom_post_type') {
+        $custom_field = get_post_meta(get_the_ID(), 'custom_field_name', true);
+        $content .= '<p><strong>Custom Field:</strong> ' . esc_html($custom_field) . '</p>';
+    }
+    return $content;
+}
+add_filter('the_excerpt_rss', 'custom_rss_content');
+add_filter('the_content_feed', 'custom_rss_content');
 // Add a settings panel in CF7 editor
 function cf7_add_submission_settings_panel($panels) {
     $panels['submission-settings'] = array(
